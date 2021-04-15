@@ -4,6 +4,7 @@ import datetime
 import isv
 import configstore
 
+from html import escape
 from time import sleep
 from strings import lang as _
 from telegram import (
@@ -41,7 +42,7 @@ def get_markup() -> ReplyKeyboardMarkup:
 
 
 def reply(update: Update, text: str) -> None:
-    update.message.reply_text(text,
+    update.message.reply_text(escape(text),
                               reply_markup=get_markup(),
                               parse_mode=ParseMode.HTML)
 
