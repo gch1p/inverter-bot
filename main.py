@@ -42,7 +42,7 @@ def get_markup() -> ReplyKeyboardMarkup:
 
 
 def reply(update: Update, text: str) -> None:
-    update.message.reply_text(escape(text),
+    update.message.reply_text(text,
                               reply_markup=get_markup(),
                               parse_mode=ParseMode.HTML)
 
