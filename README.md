@@ -25,6 +25,33 @@ use_sudo=0
 
 Only users in `admins` are allowed to use the bot.
 
+## Launching with systemd
+
+Create a service file `/etc/systemd/system/inverter-bot.service` with the following content (changing stuff like paths):
+
+```systemd
+[Unit]
+Description=inverter bot
+After=network.target
+
+[Service]
+User=user
+Group=user
+Restart=on-failure
+ExecStart=python3 /home/user/inverter-bot/main.py
+WorkingDirectory=/home/user/inverter-bot
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Then enable and start the service:
+```
+systemctl daemon-reload
+systemctl enable inverter-bot
+systemctl start inverter-bot
+```
+
 ## License
 
 BSD-2c
