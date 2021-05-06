@@ -54,4 +54,4 @@ systemctl start inverter-bot
 
 ## License
 
-BSD-2c
+MIT
