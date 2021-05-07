@@ -1,10 +1,11 @@
-import logging
-import re
-import datetime
-import isv
-import configstore
+#!/usr/bin/env python3
+import logging, re, datetime, json
 
+from inverterd import Format, Client as InverterClient, InverterError
+from typing import Optional
+from argparse import ArgumentParser
 from html import escape
+from pprint import pprint
 from time import sleep
 from strings import lang as _
 from telegram import (
@@ -22,9 +23,40 @@ from telegram.ext import (
 )
 
 
+class InverterClientWrapper:
+    def __init__(self, host: str, port: str):
+        self._host = host
+        self._port = port
+        self._inverter = None
+
+        self.create()
+
+    def create(self):
+        self._inverter = InverterClient(host=self._host, port=self._port)
+        self._inverter.connect()
+
+    def exec(self, command: str, arguments: tuple = (), format=Format.JSON):
+        try:
+            self._inverter.format(format)
+            return self._inverter.exec(command, arguments)
+        except InverterError as e:
+            raise e
+        except Exception as e:
+            # silently try to reconnect
+            try:
+                self.create()
+            except Exception:
+                pass
+            raise e
+
+
+inverter: Optional[InverterClientWrapper] = None
+
+
 #
 # helpers
 #
+
 
 def get_markup() -> ReplyKeyboardMarkup:
     button = [
@@ -57,7 +89,7 @@ def start(update: Update, context: CallbackContext) -> None:
 
 def msg_status(update: Update, context: CallbackContext) -> None:
     try:
-        gs = isv.general_status()
+        gs = json.loads(inverter.exec('get-status'))['data']
 
         # render response
         power_direction = gs['battery_power_direction'].lower()
@@ -65,23 +97,25 @@ def msg_status(update: Update, context: CallbackContext) -> None:
 
         charging_rate = ''
         if power_direction == 'charging':
-            charging_rate = ' @ %s %s' % tuple(gs['battery_charging_current'])
+            charging_rate = ' @ %s %s' % (
+            gs['battery_charging_current']['value'], gs['battery_charging_current']['unit'])
         elif power_direction == 'discharging':
-            charging_rate = ' @ %s %s' % tuple(gs['battery_discharge_current'])
+            charging_rate = ' @ %s %s' % (
+            gs['battery_discharging_current']['value'], gs['battery_discharging_current']['unit'])
 
-        html = '<b>Battery:</b> %s %s' % tuple(gs['battery_voltage'])
-        html += ' (%s%s, ' % tuple(gs['battery_capacity'])
+        html = '<b>Battery:</b> %s %s' % (gs['battery_voltage']['value'], gs['battery_voltage']['unit'])
+        html += ' (%s%s, ' % (gs['battery_capacity']['value'], gs['battery_capacity']['unit'])
         html += '%s%s)' % (power_direction, charging_rate)
 
-        html += '\n<b>Load:</b> %s %s' % tuple(gs['ac_output_active_power'])
-        html += ' (%s%%)' % (gs['output_load_percent'][0])
+        html += '\n<b>Load:</b> %s %s' % (gs['ac_output_active_power']['value'], gs['ac_output_active_power']['unit'])
+        html += ' (%s%%)' % (gs['output_load_percent']['value'])
 
-        if gs['pv1_input_power'][0] > 0:
-            html += '\n<b>Input power:</b> %s%s' % tuple(gs['pv1_input_power'])
+        if gs['pv1_input_power']['value'] > 0:
+            html += '\n<b>Input power:</b> %s%s' % (gs['pv1_input_power']['value'], gs['pv1_input_power']['unit'])
 
-        if gs['grid_voltage'][0] > 0 or gs['grid_freq'][0] > 0:
-            html += '\n<b>Generator:</b> %s %s' % tuple(gs['grid_voltage'])
-            html += ', %s %s' % tuple(gs['grid_freq'])
+        if gs['grid_voltage']['value'] > 0 or gs['grid_freq']['value'] > 0:
+            html += '\n<b>Generator:</b> %s %s' % (gs['grid_voltage']['unit'], gs['grid_voltage']['value'])
+            html += ', %s %s' % (gs['grid_freq']['value'], gs['grid_freq']['unit'])
 
         # send response
         reply(update, html)
@@ -96,24 +130,24 @@ def msg_generation(update: Update, context: CallbackContext) -> None:
         yday = today - datetime.timedelta(days=1)
         yday2 = today - datetime.timedelta(days=2)
 
-        gs = isv.general_status()
-        sleep(0.1)
+        gs = json.loads(inverter.exec('get-status'))['data']
+        # sleep(0.1)
 
-        gen_today = isv.day_generated(today.year, today.month, today.day)
+        gen_today = json.loads(inverter.exec('get-day-generated', (today.year, today.month, today.day)))['data']
         gen_yday = None
         gen_yday2 = None
 
         if yday.month == today.month:
-            sleep(0.1)
-            gen_yday = isv.day_generated(yday.year, yday.month, yday.day)
+            # sleep(0.1)
+            gen_yday = json.loads(inverter.exec('get-day-generated', (yday.year, yday.month, yday.day)))['data']
 
         if yday2.month == today.month:
-            sleep(0.1)
-            gen_yday2 = isv.day_generated(yday2.year, yday2.month, yday2.day)
+            # sleep(0.1)
+            gen_yday2 = json.loads(inverter.exec('get-day-generated', (yday2.year, yday2.month, yday2.day)))['data']
 
         # render response
-        html = '<b>Input power:</b> %s %s' % tuple(gs['pv1_input_power'])
-        html += ' (%s %s)' % tuple(gs['pv1_input_voltage'])
+        html = '<b>Input power:</b> %s %s' % (gs['pv1_input_power']['value'], gs['pv1_input_power']['unit'])
+        html += ' (%s %s)' % (gs['pv1_input_voltage']['value'], gs['pv1_input_voltage']['unit'])
 
         html += '\n<b>Today:</b> %s Wh' % (gen_today['wh'])
 
@@ -132,7 +166,7 @@ def msg_generation(update: Update, context: CallbackContext) -> None:
 
 def msg_gs(update: Update, context: CallbackContext) -> None:
     try:
-        status = isv.general_status(as_table=True)
+        status = inverter.exec('get-status', format=Format.TABLE)
         reply(update, status)
     except Exception as e:
         logging.exception(str(e))
@@ -141,7 +175,7 @@ def msg_gs(update: Update, context: CallbackContext) -> None:
 
 def msg_ri(update: Update, context: CallbackContext) -> None:
     try:
-        rated = isv.rated_information(as_table=True)
+        rated = inverter.exec('get-rated', format=Format.TABLE)
         reply(update, rated)
     except Exception as e:
         logging.exception(str(e))
@@ -150,8 +184,8 @@ def msg_ri(update: Update, context: CallbackContext) -> None:
 
 def msg_errors(update: Update, context: CallbackContext) -> None:
     try:
-        faults = isv.faults(as_table=True)
-        reply(update, faults)
+        errors = inverter.exec('get-errors', format=Format.TABLE)
+        reply(update, errors)
     except Exception as e:
         logging.exception(str(e))
         reply(update, 'exception: ' + str(e))
@@ -162,15 +196,30 @@ def msg_all(update: Update, context: CallbackContext) -> None:
 
 
 if __name__ == '__main__':
-    config = configstore.get_config()
+    # command-line arguments
+    parser = ArgumentParser()
+    parser.add_argument('--token', required=True, type=str,
+                        help='Telegram bot token')
+    parser.add_argument('--users-whitelist', nargs='+',
+                        help='ID of users allowed to use the bot')
+    parser.add_argument('--inverterd-host', default='127.0.0.1', type=str)
+    parser.add_argument('--inverterd-port', default=8305, type=int)
+    args = parser.parse_args()
 
+    whitelist = list(map(lambda x: int(x), args.users_whitelist))
+
+    # connect to inverterd
+    inverter = InverterClientWrapper(host=args.inverterd_host, port=args.inverterd_port)
+
+    # configure logging
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                         level=logging.INFO)
 
-    updater = Updater(configstore.get_token(), request_kwargs={'read_timeout': 6, 'connect_timeout': 7})
+    # configure bot
+    updater = Updater(args.token, request_kwargs={'read_timeout': 6, 'connect_timeout': 7})
     dispatcher = updater.dispatcher
 
-    user_filter = Filters.user(configstore.get_admins())
+    user_filter = Filters.user(whitelist)
 
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(MessageHandler(Filters.text(_('status')) & user_filter, msg_status))
