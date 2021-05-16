@@ -112,7 +112,7 @@ def msg_status(update: Update, context: CallbackContext) -> None:
         html += ' (%s%%)' % (gs['output_load_percent']['value'])
 
         if gs['pv1_input_power']['value'] > 0:
-            html += '\n<b>Input power:</b> %s%s' % (gs['pv1_input_power']['value'], gs['pv1_input_power']['unit'])
+            html += '\n<b>Input power:</b> %s %s' % (gs['pv1_input_power']['value'], gs['pv1_input_power']['unit'])
 
         if gs['grid_voltage']['value'] > 0 or gs['grid_freq']['value'] > 0:
             html += '\n<b>Generator:</b> %s %s' % (gs['grid_voltage']['unit'], gs['grid_voltage']['value'])
