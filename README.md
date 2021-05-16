@@ -31,7 +31,7 @@ Create environment configuration file `/etc/default/inverter-bot`:
 ```
 TOKEN="YOUR_TOKEN"
 USERS="ID ID ID ..."
-OPTS="" # here you can pass other options such as --inverterd-host
+PARAMS="" # here you can pass other options such as --inverterd-host
 ```
 
 Create systemd service file `/etc/systemd/system/inverter-bot.service` with the following content (changing stuff like paths):
