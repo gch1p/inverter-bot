@@ -21,6 +21,7 @@ from telegram.ext import (
     MessageHandler,
     CallbackContext
 )
+from telegram.error import TimedOut
 
 
 class InverterClientWrapper:
@@ -121,7 +122,8 @@ def msg_status(update: Update, context: CallbackContext) -> None:
         reply(update, html)
     except Exception as e:
         logging.exception(str(e))
-        reply(update, 'exception: ' + str(e))
+        if not isinstance(e, TimedOut):
+            reply(update, 'exception: ' + str(e))
 
 
 def msg_generation(update: Update, context: CallbackContext) -> None:
@@ -161,7 +163,8 @@ def msg_generation(update: Update, context: CallbackContext) -> None:
         reply(update, html)
     except Exception as e:
         logging.exception(str(e))
-        reply(update, 'exception: ' + str(e))
+        if not isinstance(e, TimedOut):
+            reply(update, 'exception: ' + str(e))
 
 
 def msg_gs(update: Update, context: CallbackContext) -> None:
@@ -170,7 +173,8 @@ def msg_gs(update: Update, context: CallbackContext) -> None:
         reply(update, status)
     except Exception as e:
         logging.exception(str(e))
-        reply(update, 'exception: ' + str(e))
+        if not isinstance(e, TimedOut):
+            reply(update, 'exception: ' + str(e))
 
 
 def msg_ri(update: Update, context: CallbackContext) -> None:
@@ -179,7 +183,8 @@ def msg_ri(update: Update, context: CallbackContext) -> None:
         reply(update, rated)
     except Exception as e:
         logging.exception(str(e))
-        reply(update, 'exception: ' + str(e))
+        if not isinstance(e, TimedOut):
+            reply(update, 'exception: ' + str(e))
 
 
 def msg_errors(update: Update, context: CallbackContext) -> None:
@@ -188,7 +193,8 @@ def msg_errors(update: Update, context: CallbackContext) -> None:
         reply(update, errors)
     except Exception as e:
         logging.exception(str(e))
-        reply(update, 'exception: ' + str(e))
+        if not isinstance(e, TimedOut):
+            reply(update, 'exception: ' + str(e))
 
 
 def msg_all(update: Update, context: CallbackContext) -> None:
