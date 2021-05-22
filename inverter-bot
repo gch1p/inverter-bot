@@ -88,7 +88,8 @@ def handle_exc(update: Update, e) -> None:
             err = json.loads(str(e))['message']
         except json.decoder.JSONDecodeError:
             err = str(e)
-        reply(update, f'<b>Error:</b> {err}')
+        err = re.sub(r'((?:.*)?error:) (.*)', r'<b>\1</b> \2', err)
+        reply(update, err)
 
     elif not isinstance(e, TimedOut):
         reply(update, 'exception: ' + str(e))
