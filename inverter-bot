@@ -90,6 +90,13 @@ def handle_exc(update: Update, e) -> None:
     elif not isinstance(e, TimedOut):
         reply(update, 'exception: ' + str(e))
 
+
+def beautify_table(s):
+    lines = s.split('\n')
+    lines = list(map(lambda line: re.sub(r'\s+', ' ', line), lines))
+    lines = list(map(lambda line: re.sub(r'(.*?): (.*)', r'<b>\1:</b> \2', line), lines))
+    return '\n'.join(lines)
+
 #
 # command/message handlers
 #
@@ -176,7 +183,7 @@ def msg_generation(update: Update, context: CallbackContext) -> None:
 def msg_gs(update: Update, context: CallbackContext) -> None:
     try:
         status = inverter.exec('get-status', format=Format.TABLE)
-        reply(update, status)
+        reply(update, beautify_table(status))
     except Exception as e:
         handle_exc(update, e)
 
@@ -184,7 +191,7 @@ def msg_gs(update: Update, context: CallbackContext) -> None:
 def msg_ri(update: Update, context: CallbackContext) -> None:
     try:
         rated = inverter.exec('get-rated', format=Format.TABLE)
-        reply(update, rated)
+        reply(update, beautify_table(rated))
     except Exception as e:
         handle_exc(update, e)
 
@@ -192,7 +199,7 @@ def msg_ri(update: Update, context: CallbackContext) -> None:
 def msg_errors(update: Update, context: CallbackContext) -> None:
     try:
         errors = inverter.exec('get-errors', format=Format.TABLE)
-        reply(update, errors)
+        reply(update, beautify_table(errors))
     except Exception as e:
         handle_exc(update, e)
 
