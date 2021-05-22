@@ -84,7 +84,10 @@ def handle_exc(update: Update, e) -> None:
     logging.exception(str(e))
 
     if isinstance(e, InverterError):
-        err = json.loads(str(e))['message']
+        try:
+            err = json.loads(str(e))['message']
+        except json.decoder.JSONDecodeError:
+            err = str(e)
         reply(update, f'<b>Error:</b> {err}')
 
     elif not isinstance(e, TimedOut):
