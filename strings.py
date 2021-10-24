@@ -9,7 +9,7 @@ __strings = {
     'flag_overload_restart': 'Restart on overload',
     'flag_over_temp_restart': 'Restart on overtemp',
     'flag_backlight_on': 'LCD backlight',
-    'flag_alarm_on_on_primary_source_interrupt': 'Beep on primary source interrupt',
+    'flag_alarm_on_on_primary_source_interrupt': 'Beep on primary source interruption',
     'flag_fault_code_record': 'Fault code recording',
 }
 
