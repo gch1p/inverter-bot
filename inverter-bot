@@ -212,6 +212,56 @@ def msg_all(update: Update, context: CallbackContext) -> None:
     reply(update, "Command not recognized. Please try again.")
 
 
+def on_set_ac_charging_current(update: Update, context: CallbackContext) -> None:
+    try:
+        current = int(context.args[0])
+        allowed_values = json.loads(inverter.exec('get-allowed-ac-charging-currents'))['data']
+
+        if current not in allowed_values:
+            raise ValueError(f'invalid value {current}, allowed values: ' + ', '.join(map(lambda x: str(x), allowed_values)))
+
+        response = json.loads(inverter.exec('set-max-ac-charging-current', (0, current)))
+        reply(update, 'OK' if response['result'] == 'ok' else 'ERROR')
+
+    except IndexError:
+        reply(update, escape('Usage: /setacchargingcurrent <current>'))
+
+    except ValueError as e:
+        handle_exc(update, e)
+
+
+def on_set_ac_charging_thresholds(update: Update, context: CallbackContext) -> None:
+    try:
+        cv = float(context.args[0])
+        dv = float(context.args[1])
+
+        if 44 <= cv <= 51 and 48 <= dv <= 58:
+            response = json.loads(inverter.exec('set-charging-thresholds', (cv, dv)))
+            reply(update, 'OK' if response['result'] == 'ok' else 'ERROR')
+        else:
+            raise ValueError('invalid values')
+
+    except (IndexError, ValueError):
+        reply(update, escape('Usage: /setacchargingthresholds CV DV\n\n'
+                             '44 <= CV <= 51\n'
+                             '48 <= DV <= 58'))
+
+
+def on_set_battery_under_voltage(update: Update, context: CallbackContext) -> None:
+    try:
+        v = float(context.args[0])
+
+        if 40.0 <= v <= 48.0:
+            response = json.loads(inverter.exec('set-battery-cut-off-voltage', (v,)))
+            reply(update, 'OK' if response['result'] == 'ok' else 'ERROR')
+        else:
+            raise ValueError('invalid voltage')
+
+    except (IndexError, ValueError):
+        reply(update, escape('Usage: /setbatteryundervoltage VOLTAGE\n\n'
+                             'VOLTAGE must be a floating point number between 40.0 and 48.0'))
+
+
 if __name__ == '__main__':
     # command-line arguments
     parser = ArgumentParser()
@@ -244,6 +294,11 @@ if __name__ == '__main__':
     dispatcher.add_handler(MessageHandler(Filters.text(_('gs')) & user_filter, msg_gs))
     dispatcher.add_handler(MessageHandler(Filters.text(_('ri')) & user_filter, msg_ri))
     dispatcher.add_handler(MessageHandler(Filters.text(_('errors')) & user_filter, msg_errors))
+
+    dispatcher.add_handler(CommandHandler('setacchargingcurrent', on_set_ac_charging_current))
+    dispatcher.add_handler(CommandHandler('setacchargingthresholds', on_set_ac_charging_thresholds))
+    dispatcher.add_handler(CommandHandler('setbatteryundervoltage', on_set_battery_under_voltage))
+
     dispatcher.add_handler(MessageHandler(Filters.all & user_filter, msg_all))
 
     # start the bot
