@@ -265,7 +265,7 @@ def on_set_ac_charging_thresholds(update: Update, context: CallbackContext) -> N
 
     except (IndexError, ValueError):
         usage = get_usage('setgenct', {
-            'CV': f'charging voltage 44, {LT} CV {LT} 51',
+            'CV': f'charging voltage, 44 {LT} CV {LT} 51',
             'DV': f'discharging voltage, 48 {LT} DV {LT} 58'
         })
         reply(update, usage)
