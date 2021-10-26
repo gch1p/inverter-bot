@@ -172,8 +172,7 @@ def msg_status(update: Update, context: CallbackContext) -> None:
             gs['battery_discharging_current']['value'], gs['battery_discharging_current']['unit'])
 
         html = '<b>Battery:</b> %s %s' % (gs['battery_voltage']['value'], gs['battery_voltage']['unit'])
-        html += ' (%s%s, ' % (gs['battery_capacity']['value'], gs['battery_capacity']['unit'])
-        html += '%s%s)' % (power_direction, charging_rate)
+        html += ' (%s%s)' % (power_direction, charging_rate)
 
         html += '\n<b>Load:</b> %s %s' % (gs['ac_output_active_power']['value'], gs['ac_output_active_power']['unit'])
         html += ' (%s%%)' % (gs['output_load_percent']['value'])
