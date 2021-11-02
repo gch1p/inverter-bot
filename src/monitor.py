@@ -54,11 +54,11 @@ class InverterMonitor(Thread):
     def set_ac_current_range(self, ac_current_range: Union[List, Tuple] = ()) -> None:
         self.max_ac_current = ac_current_range[0]
         self.min_ac_current = ac_current_range[1]
-        _logger.info(f'setting AC current range to {ac_current_range[0]}..{ac_current_range[1]}')
+        _logger.debug(f'setting AC current range to {ac_current_range[0]}..{ac_current_range[1]}')
 
     def set_battery_under_voltage(self, v: float):
         self.battery_under_voltage = v
-        _logger.info(f'setting battery under voltage: {v}')
+        _logger.debug(f'setting battery under voltage: {v}')
 
     def run(self):
         self.allowed_currents = list(inverter.exec('get-allowed-ac-charging-currents')['data'])
