@@ -328,10 +328,6 @@ def on_errors(update: Update, context: CallbackContext) -> None:
         handle_exc(update, e)
 
 
-def on_test(update: Update, context: CallbackContext) -> None:
-    monitor_charging_event_handler(ChargingEvent.AC_CURRENT_CHANGED, current=20)
-
-
 def on_button(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
 
@@ -450,7 +446,6 @@ if __name__ == '__main__':
     dispatcher.add_handler(CommandHandler('status', on_status))
     dispatcher.add_handler(CommandHandler('config', on_config))
     dispatcher.add_handler(CommandHandler('errors', on_errors))
-    dispatcher.add_handler(CommandHandler('test', on_test))
 
     dispatcher.add_handler(MessageHandler(Filters.all & user_filter, msg_all))
 
