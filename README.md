@@ -51,7 +51,7 @@ EnvironmentFile=/etc/default/inverter-bot
 User=user
 Group=user
 Restart=on-failure
-ExecStart=python3 /home/user/inverter-bot/inverter-bot --token $TOKEN --users-whitelist $USERS --notify-to $NOTIFY_USERS $PARAMS
+ExecStart=python3 /home/user/inverter-bot/src/inverter-bot --token $TOKEN --users-whitelist $USERS --notify-to $NOTIFY_USERS $PARAMS
 WorkingDirectory=/home/user/inverter-bot
 
 [Install]
