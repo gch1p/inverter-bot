@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-import logging, re, datetime, json
+import logging
+import re
+import datetime
+import json
 
-from inverterd import Format, Client as InverterClient, InverterError
 from typing import Optional, Tuple
 from argparse import ArgumentParser
 from html import escape
-# from pprint import pprint
-# from time import sleep
-from strings import lang as _
+from inverter_wrapper import InverterClientWrapper, wrapper_instance as inverter
+from monitor import InverterMonitor, ChargingEvent
+from inverterd import Format, InverterError
 from telegram import (
     Update,
     ParseMode,
@@ -27,6 +29,9 @@ from telegram.ext import (
 from telegram.error import TimedOut
 
 
+monitor: Optional[InverterMonitor] = None
+updater: Optional[Updater] = None
+notify_to: list[int] = []
 LT = escape('<=')
 flags_map = {
     'buzzer': 'BUZZ',
@@ -38,44 +43,37 @@ flags_map = {
     'alarm_on_on_primary_source_interrupt': 'ALRM',
     'fault_code_record': 'FTCR',
 }
+_strings = {
+    'status': 'Status',
+    'generation': 'Generation',
 
+    # flags
+    'flag_buzzer': 'Buzzer',
+    'flag_overload_bypass': 'Overload bypass',
+    'flag_escape_to_default_screen_after_1min_timeout': 'Reset to default LCD page after 1min timeout',
+    'flag_overload_restart': 'Restart on overload',
+    'flag_over_temp_restart': 'Restart on overtemp',
+    'flag_backlight_on': 'LCD backlight',
+    'flag_alarm_on_on_primary_source_interrupt': 'Beep on primary source interruption',
+    'flag_fault_code_record': 'Fault code recording',
 
-class InverterClientWrapper:
-    def __init__(self, host: str, port: str):
-        self._host = host
-        self._port = port
-        self._inverter = None
-
-        self.create()
-
-    def create(self):
-        self._inverter = InverterClient(host=self._host, port=self._port)
-        self._inverter.connect()
-
-    def exec(self, command: str, arguments: tuple = (), format=Format.JSON):
-        try:
-            self._inverter.format(format)
-            response = self._inverter.exec(command, arguments)
-            if format == Format.JSON:
-                response = json.loads(response)
-            return response
-        except InverterError as e:
-            raise e
-        except Exception as e:
-            # silently try to reconnect
-            try:
-                self.create()
-            except Exception:
-                pass
-            raise e
-
-
-inverter: Optional[InverterClientWrapper] = None
+    # monitor
+    'chrg_evt_started': 'Started charging from AC.',
+    'chrg_evt_finished': 'Finished charging from AC.',
+    'chrg_evt_disconnected': 'AC line disconnected.',
+    'chrg_evt_current_changed': 'AC charging current set to <b>%dA</b>.',
+    'chrg_evt_na_solar': 'AC line detected, but battery charging is unavailable due to active solar power line.'
+}
+logger = logging.getLogger(__name__)
 
 
 #
 # helpers
 #
+
+def _(key, *args):
+    global _strings
+    return (_strings[key] if key in _strings else f'{{{key}}}') % args
 
 
 def get_usage(command: str, arguments: dict) -> str:
@@ -277,6 +275,7 @@ def on_set_battery_under_voltage(update: Update, context: CallbackContext) -> No
         if 40.0 <= v <= 48.0:
             response = inverter.exec('set-battery-cut-off-voltage', (v,))
             reply(update, 'OK' if response['result'] == 'ok' else 'ERROR')
+            monitor.set_battery_under_voltage(v)
         else:
             raise ValueError('invalid voltage')
 
@@ -329,6 +328,10 @@ def on_errors(update: Update, context: CallbackContext) -> None:
         handle_exc(update, e)
 
 
+def on_test(update: Update, context: CallbackContext) -> None:
+    monitor_charging_event_handler(ChargingEvent.AC_CURRENT_CHANGED, current=20)
+
+
 def on_button(update: Update, context: CallbackContext) -> None:
     query = update.callback_query
 
@@ -364,6 +367,39 @@ def on_button(update: Update, context: CallbackContext) -> None:
         query.answer('unexpected callback data')
 
 
+def monitor_charging_event_handler(event: ChargingEvent, **kwargs):
+    key = None
+    args = []
+
+    if event == ChargingEvent.AC_CHARGING_STARTED:
+        key = 'started'
+    elif event == ChargingEvent.AC_CHARGING_FINISHED:
+        key = 'finished'
+    elif event == ChargingEvent.AC_DISCONNECTED:
+        key = 'disconnected'
+    elif event == ChargingEvent.AC_CURRENT_CHANGED:
+        key = 'current_changed'
+        args.append(kwargs['current'])
+    elif event == ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR:
+        key = 'na_solar'
+
+    if key is None:
+        logger.error('unknown charging event:', event)
+        return
+
+    text = _(f'chrg_evt_{key}', *args)
+
+    for chat_id in notify_to:
+        updater.bot.send_message(chat_id=chat_id,
+                                 text=text,
+                                 parse_mode='HTML',
+                                 reply_markup=get_markup())
+
+
+def monitor_battery_event_handler(event):
+    pass
+
+
 if __name__ == '__main__':
     # command-line arguments
     parser = ArgumentParser()
@@ -371,18 +407,29 @@ if __name__ == '__main__':
                         help='Telegram bot token')
     parser.add_argument('--users-whitelist', nargs='+',
                         help='ID of users allowed to use the bot')
+    parser.add_argument('--notify-to', nargs='+')
+    parser.add_argument('--ac-current-range', nargs='+', default=(10, 30))
     parser.add_argument('--inverterd-host', default='127.0.0.1', type=str)
     parser.add_argument('--inverterd-port', default=8305, type=int)
+    parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
     whitelist = list(map(lambda x: int(x), args.users_whitelist))
+    notify_to = list(map(lambda x: int(x), args.notify_to)) if args.notify_to is not None else []
 
     # connect to inverterd
-    inverter = InverterClientWrapper(host=args.inverterd_host, port=args.inverterd_port)
+    inverter.init(host=args.inverterd_host, port=args.inverterd_port)
+
+    # start monitoring
+    monitor = InverterMonitor(args.ac_current_range)
+    monitor.set_charging_event_handler(monitor_charging_event_handler)
+    monitor.set_battery_event_handler(monitor_battery_event_handler)
+    monitor.start()
 
     # configure logging
+    logging_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                        level=logging.INFO)
+                        level=logging_level)
 
     # configure bot
     updater = Updater(args.token, request_kwargs={'read_timeout': 6, 'connect_timeout': 7})
@@ -403,7 +450,7 @@ if __name__ == '__main__':
     dispatcher.add_handler(CommandHandler('status', on_status))
     dispatcher.add_handler(CommandHandler('config', on_config))
     dispatcher.add_handler(CommandHandler('errors', on_errors))
-
+    dispatcher.add_handler(CommandHandler('test', on_test))
 
     dispatcher.add_handler(MessageHandler(Filters.all & user_filter, msg_all))
 
@@ -412,3 +459,5 @@ if __name__ == '__main__':
 
     # run the bot until the user presses Ctrl-C or the process receives SIGINT, SIGTERM or SIGABRT
     updater.idle()
+
+    monitor.stop()

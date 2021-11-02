@@ -20,8 +20,12 @@ The bot accepts following parameters:
 * ``--token`` — your telegram bot token (required)
 * ``--users-whitelist`` — space-separated list of IDs of users who are allowed
   to use the bot (required)
+* ``--notify-to`` — space-separated list of IDs of users who need to be notified of
+  monitoring programs events
+* ``--ac-current-range`` (default is `(10, 30)`)
 * ``--inverterd-host`` (default is `127.0.0.1`)
 * ``--inverterd-port`` (default is `8305`)
+* ``--verbose``
 
 ## Launching with systemd
 
@@ -31,6 +35,7 @@ Create environment configuration file `/etc/default/inverter-bot`:
 ```
 TOKEN="YOUR_TOKEN"
 USERS="ID ID ID ..."
+NOTIFY_USERS="ID ID ID..."
 PARAMS="" # here you can pass other options such as --inverterd-host
 ```
 
@@ -46,7 +51,7 @@ EnvironmentFile=/etc/default/inverter-bot
 User=user
 Group=user
 Restart=on-failure
-ExecStart=python3 /home/user/inverter-bot/inverter-bot --token $TOKEN --users-whitelist $USERS $PARAMS
+ExecStart=python3 /home/user/inverter-bot/inverter-bot --token $TOKEN --users-whitelist $USERS --notify-to $NOTIFY_USERS $PARAMS
 WorkingDirectory=/home/user/inverter-bot
 
 [Install]
