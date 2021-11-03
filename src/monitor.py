@@ -41,7 +41,7 @@ class InverterMonitor(Thread):
         self.allowed_currents = []
         self.battery_under_voltage = None
         self.charging_event_handler = None
-        self.battery_voltage_handler = None
+        self.battery_event_handler = None
 
         self.currents = []
         self.active_current = None
@@ -88,6 +88,8 @@ class InverterMonitor(Thread):
 
                     if not ac:
                         self.low_voltage_program(v)
+                    elif self.battery_state != BatteryState.NORMAL:
+                        self.battery_state = BatteryState.NORMAL
 
             except InverterError as e:
                 _logger.exception(e)
@@ -180,13 +182,22 @@ class InverterMonitor(Thread):
             _logger.exception(e)
 
     def low_voltage_program(self, v: float):
-        pass
+        if v < 45:
+            state = BatteryState.CRITICAL
+        elif v < 47:
+            state = BatteryState.WARNING
+        else:
+            state = BatteryState.NORMAL
+
+        if state != self.battery_state:
+            self.battery_state = state
+            self.battery_event_handler(state, v=v)
 
     def set_charging_event_handler(self, handler: Callable):
         self.charging_event_handler = handler
 
     def set_battery_event_handler(self, handler: Callable):
-        self.battery_voltage_handler = handler
+        self.battery_event_handler = handler
 
     def stop(self):
         self.interrupted = True

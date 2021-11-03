@@ -7,8 +7,8 @@ import json
 from typing import Optional, Tuple
 from argparse import ArgumentParser
 from html import escape
-from inverter_wrapper import InverterClientWrapper, wrapper_instance as inverter
-from monitor import InverterMonitor, ChargingEvent
+from inverter_wrapper import wrapper_instance as inverter
+from monitor import InverterMonitor, ChargingEvent, BatteryState
 from inverterd import Format, InverterError
 from telegram import (
     Update,
@@ -62,7 +62,8 @@ _strings = {
     'chrg_evt_finished': 'Finished charging from AC.',
     'chrg_evt_disconnected': 'AC line disconnected.',
     'chrg_evt_current_changed': 'AC charging current set to <b>%dA</b>.',
-    'chrg_evt_na_solar': 'AC line detected, but battery charging is unavailable due to active solar power line.'
+    'chrg_evt_na_solar': 'AC line detected, but battery charging is unavailable due to active solar power line.',
+    'battery_state_changed': 'Battery voltage state changed to <b>%s</b> (%0.1f V)'
 }
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,14 @@ def reply(update: Update, text: str, reply_markup=None) -> None:
     update.message.reply_text(text,
                               reply_markup=reply_markup,
                               parse_mode=ParseMode.HTML)
+
+
+def notify_all(text: str) -> None:
+    for chat_id in notify_to:
+        updater.bot.send_message(chat_id=chat_id,
+                                 text=text,
+                                 parse_mode='HTML',
+                                 reply_markup=get_markup())
 
 
 def handle_exc(update: Update, e) -> None:
@@ -363,7 +372,7 @@ def on_button(update: Update, context: CallbackContext) -> None:
         query.answer('unexpected callback data')
 
 
-def monitor_charging_event_handler(event: ChargingEvent, **kwargs):
+def monitor_charging_event_handler(event: ChargingEvent, **kwargs) -> None:
     key = None
     args = []
 
@@ -383,17 +392,21 @@ def monitor_charging_event_handler(event: ChargingEvent, **kwargs):
         logger.error('unknown charging event:', event)
         return
 
-    text = _(f'chrg_evt_{key}', *args)
-
-    for chat_id in notify_to:
-        updater.bot.send_message(chat_id=chat_id,
-                                 text=text,
-                                 parse_mode='HTML',
-                                 reply_markup=get_markup())
+    notify_all(_(f'chrg_evt_{key}', *args))
 
 
-def monitor_battery_event_handler(event):
-    pass
+def monitor_battery_event_handler(state: BatteryState, v: float) -> None:
+    if state == BatteryState.NORMAL:
+        label = 'normal'
+    elif state == BatteryState.WARNING:
+        label = 'warning'
+    elif state == BatteryState.CRITICAL:
+        label = 'critical'
+    else:
+        logger.error('unknown battery state:', state)
+        return
+
+    notify_all(_('battery_state_changed', label, v))
 
 
 if __name__ == '__main__':
