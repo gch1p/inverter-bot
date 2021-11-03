@@ -13,7 +13,6 @@ from inverterd import Format, InverterError
 from telegram import (
     Update,
     ParseMode,
-    KeyboardButton,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     ReplyKeyboardMarkup
@@ -27,7 +26,6 @@ from telegram.ext import (
     CallbackQueryHandler
 )
 from telegram.error import TimedOut
-
 
 monitor: Optional[InverterMonitor] = None
 updater: Optional[Updater] = None
@@ -60,10 +58,12 @@ _strings = {
     # monitor
     'chrg_evt_started': 'Started charging from AC.',
     'chrg_evt_finished': 'Finished charging from AC.',
-    'chrg_evt_disconnected': 'AC line disconnected.',
+    'chrg_evt_disconnected': 'AC disconnected.',
     'chrg_evt_current_changed': 'AC charging current set to <b>%dA</b>.',
-    'chrg_evt_na_solar': 'AC line detected, but battery charging is unavailable due to active solar power line.',
-    'battery_level_changed': 'Battery level: <b>%s</b> (<b>%0.1f V</b> under <b>%d W</b> load)'
+    'chrg_evt_not_charging': 'AC connected but not charging.',
+    'chrg_evt_na_solar': 'AC connected, but battery won\'t be charged due to active solar power line.',
+    'battery_level_changed': 'Battery level: <b>%s</b> (<b>%0.1f V</b> under <b>%d W</b> load)',
+    'error_message': '<b>Error:</b> %s.'
 }
 logger = logging.getLogger(__name__)
 
@@ -266,6 +266,7 @@ def on_set_ac_charging_thresholds(update: Update, context: CallbackContext) -> N
         if 44 <= cv <= 51 and 48 <= dv <= 58:
             response = inverter.exec('set-charging-thresholds', (cv, dv))
             reply(update, 'OK' if response['result'] == 'ok' else 'ERROR')
+            monitor.set_battery_ac_charging_thresholds(cv, dv)
         else:
             raise ValueError('invalid values')
 
@@ -372,21 +373,28 @@ def on_button(update: Update, context: CallbackContext) -> None:
         query.answer('unexpected callback data')
 
 
+#
+# InverterMonitor event handlers
+#
+
 def monitor_charging_event_handler(event: ChargingEvent, **kwargs) -> None:
     key = None
     args = []
 
-    if event == ChargingEvent.AC_CHARGING_STARTED:
-        key = 'started'
-    elif event == ChargingEvent.AC_CHARGING_FINISHED:
-        key = 'finished'
-    elif event == ChargingEvent.AC_DISCONNECTED:
-        key = 'disconnected'
-    elif event == ChargingEvent.AC_CURRENT_CHANGED:
-        key = 'current_changed'
-        args.append(kwargs['current'])
-    elif event == ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR:
-        key = 'na_solar'
+    match event:
+        case ChargingEvent.AC_CHARGING_STARTED:
+            key = 'started'
+        case ChargingEvent.AC_CHARGING_FINISHED:
+            key = 'finished'
+        case ChargingEvent.AC_DISCONNECTED:
+            key = 'disconnected'
+        case ChargingEvent.AC_NOT_CHARGING:
+            key = 'not_charging'
+        case ChargingEvent.AC_CURRENT_CHANGED:
+            key = 'current_changed'
+            args.append(kwargs['current'])
+        case ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR:
+            key = 'na_solar'
 
     if key is None:
         logger.error('unknown charging event:', event)
@@ -396,17 +404,22 @@ def monitor_charging_event_handler(event: ChargingEvent, **kwargs) -> None:
 
 
 def monitor_battery_event_handler(state: BatteryState, v: float, load_watts: int) -> None:
-    if state == BatteryState.NORMAL:
-        label = '✅ Normal'
-    elif state == BatteryState.LOW:
-        label = '⚠️ Low'
-    elif state == BatteryState.CRITICAL:
-        label = '‼️ Critical'
-    else:
-        logger.error('unknown battery state:', state)
-        return
+    match state:
+        case BatteryState.NORMAL:
+            label = '✅ Normal'
+        case BatteryState.LOW:
+            label = '⚠️ Low'
+        case BatteryState.CRITICAL:
+            label = '‼️ Critical'
+        case _:
+            logger.error('unknown battery state:', state)
+            return
 
     notify_all(_('battery_level_changed', label, v, load_watts))
+
+
+def monitor_error_handler(error: str) -> None:
+    notify_all(_('error_message', error))
 
 
 if __name__ == '__main__':
@@ -433,6 +446,7 @@ if __name__ == '__main__':
     monitor = InverterMonitor(args.ac_current_range)
     monitor.set_charging_event_handler(monitor_charging_event_handler)
     monitor.set_battery_event_handler(monitor_battery_event_handler)
+    monitor.set_error_handler(monitor_error_handler)
     monitor.start()
 
     # configure logging
