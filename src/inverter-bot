@@ -59,7 +59,7 @@ _strings = {
     'chrg_evt_started': '✅ Started charging from AC.',
     'chrg_evt_finished': '✅ Finished charging from AC.',
     'chrg_evt_disconnected': 'ℹ️ AC disconnected.',
-    'chrg_evt_current_changed': 'ℹ️ AC charging current set to <b>%d A</b>.',
+    'chrg_evt_current_changed': 'ℹ️ AC charging current set to %d A.',
     'chrg_evt_not_charging': 'ℹ️ AC connected but not charging.',
     'chrg_evt_na_solar': '⛔️AC connected, but battery won\'t be charged due to active solar power line.',
     'battery_level_changed': 'Battery level: <b>%s</b> (<b>%0.1f V</b> under <b>%d W</b> load)',
