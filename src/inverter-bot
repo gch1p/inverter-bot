@@ -378,25 +378,21 @@ def on_button(update: Update, context: CallbackContext) -> None:
 #
 
 def monitor_charging_event_handler(event: ChargingEvent, **kwargs) -> None:
-    key = None
     args = []
-
-    match event:
-        case ChargingEvent.AC_CHARGING_STARTED:
-            key = 'started'
-        case ChargingEvent.AC_CHARGING_FINISHED:
-            key = 'finished'
-        case ChargingEvent.AC_DISCONNECTED:
-            key = 'disconnected'
-        case ChargingEvent.AC_NOT_CHARGING:
-            key = 'not_charging'
-        case ChargingEvent.AC_CURRENT_CHANGED:
-            key = 'current_changed'
-            args.append(kwargs['current'])
-        case ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR:
-            key = 'na_solar'
-
-    if key is None:
+    if event == ChargingEvent.AC_CHARGING_STARTED:
+        key = 'started'
+    elif event == ChargingEvent.AC_CHARGING_FINISHED:
+        key = 'finished'
+    elif event == ChargingEvent.AC_DISCONNECTED:
+        key = 'disconnected'
+    elif event == ChargingEvent.AC_NOT_CHARGING:
+        key = 'not_charging'
+    elif event == ChargingEvent.AC_CURRENT_CHANGED:
+        key = 'current_changed'
+        args.append(kwargs['current'])
+    elif event == ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR:
+        key = 'na_solar'
+    else:
         logger.error('unknown charging event:', event)
         return
 
@@ -404,16 +400,15 @@ def monitor_charging_event_handler(event: ChargingEvent, **kwargs) -> None:
 
 
 def monitor_battery_event_handler(state: BatteryState, v: float, load_watts: int) -> None:
-    match state:
-        case BatteryState.NORMAL:
-            label = '✅ Normal'
-        case BatteryState.LOW:
-            label = '⚠️ Low'
-        case BatteryState.CRITICAL:
-            label = '‼️ Critical'
-        case _:
-            logger.error('unknown battery state:', state)
-            return
+    if state == BatteryState.NORMAL:
+        label = '✅ Normal'
+    elif state == BatteryState.LOW:
+        label = '⚠️ Low'
+    elif state == BatteryState.CRITICAL:
+        label = '‼️ Critical'
+    else:
+        logger.error('unknown battery state:', state)
+        return
 
     notify_all(_('battery_level_changed', label, v, load_watts))
 

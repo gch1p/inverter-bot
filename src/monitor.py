@@ -40,15 +40,14 @@ class BatteryState(Enum):
 
 
 def _pd_from_string(pd: str) -> BatteryPowerDirection:
-    match pd:
-        case 'Discharge':
-            return BatteryPowerDirection.DISCHARGING
-        case 'Charge':
-            return BatteryPowerDirection.CHARGING
-        case 'Do nothing':
-            return BatteryPowerDirection.DO_NOTHING
-        case _:
-            raise ValueError(f'invalid power direction: {pd}')
+    if pd == 'Discharge':
+        return BatteryPowerDirection.DISCHARGING
+    elif pd == 'Charge':
+        return BatteryPowerDirection.CHARGING
+    elif pd == 'Do nothing':
+        return BatteryPowerDirection.DO_NOTHING
+    else:
+        raise ValueError(f'invalid power direction: {pd}')
 
 
 class InverterMonitor(Thread):
@@ -140,47 +139,46 @@ class InverterMonitor(Thread):
             sleep(2)
 
     def ac_charging_program(self, ac: bool, solar: bool, v: float, pd: BatteryPowerDirection):
-        match self.charging_state:
-            case ChargingState.NOT_CHARGING:
-                if ac and solar:
-                    self.charging_state = ChargingState.AC_BUT_SOLAR
-                    self.charging_event_handler(ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR)
-                    _logger.info('entering AC_BUT_SOLAR state')
-                elif ac:
-                    self.ac_charging_start(pd)
+        if self.charging_state == ChargingState.NOT_CHARGING:
+            if ac and solar:
+                self.charging_state = ChargingState.AC_BUT_SOLAR
+                self.charging_event_handler(ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR)
+                _logger.info('entering AC_BUT_SOLAR state')
+            elif ac:
+                self.ac_charging_start(pd)
 
-            case ChargingState.AC_BUT_SOLAR:
-                if not ac:
-                    self.ac_charging_stop(ChargingState.NOT_CHARGING)
-                elif not solar:
-                    self.ac_charging_start(pd)
+        elif self.charging_state == ChargingState.AC_BUT_SOLAR:
+            if not ac:
+                self.ac_charging_stop(ChargingState.NOT_CHARGING)
+            elif not solar:
+                self.ac_charging_start(pd)
 
-            case ChargingState.AC_OK | ChargingState.AC_WAITING:
-                if not ac:
-                    self.ac_charging_stop(ChargingState.NOT_CHARGING)
-                    return
+        elif self.charging_state in (ChargingState.AC_OK, ChargingState.AC_WAITING):
+            if not ac:
+                self.ac_charging_stop(ChargingState.NOT_CHARGING)
+                return
 
-                if solar:
-                    self.charging_state = ChargingState.AC_BUT_SOLAR
-                    self.charging_event_handler(ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR)
-                    _logger.info('solar power connected during charging, entering AC_BUT_SOLAR state')
+            if solar:
+                self.charging_state = ChargingState.AC_BUT_SOLAR
+                self.charging_event_handler(ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR)
+                _logger.info('solar power connected during charging, entering AC_BUT_SOLAR state')
 
-                state = ChargingState.AC_OK if pd == BatteryPowerDirection.CHARGING else ChargingState.AC_WAITING
-                if state != self.charging_state:
-                    self.charging_state = state
+            state = ChargingState.AC_OK if pd == BatteryPowerDirection.CHARGING else ChargingState.AC_WAITING
+            if state != self.charging_state:
+                self.charging_state = state
 
-                    evt = ChargingEvent.AC_CHARGING_STARTED if state == ChargingState.AC_OK else ChargingEvent.AC_NOT_CHARGING
-                    self.charging_event_handler(evt)
+                evt = ChargingEvent.AC_CHARGING_STARTED if state == ChargingState.AC_OK else ChargingEvent.AC_NOT_CHARGING
+                self.charging_event_handler(evt)
 
-                # if currently charging, monitor battery voltage dynamics here
-                if self.active_current is not None:
-                    upper_bound = 56.6 if self.active_current > 10 else 54
-                    if v >= upper_bound:
-                        self.ac_charging_next_current()
+            # if currently charging, monitor battery voltage dynamics here
+            if self.active_current is not None:
+                upper_bound = 56.6 if self.active_current > 10 else 54
+                if v >= upper_bound:
+                    self.ac_charging_next_current()
 
-            case ChargingState.AC_DONE:
-                if not ac:
-                    self.ac_charging_stop(ChargingState.NOT_CHARGING)
+        elif self.charging_state == ChargingState.AC_DONE:
+            if not ac:
+                self.ac_charging_stop(ChargingState.NOT_CHARGING)
 
     def ac_charging_start(self, pd: BatteryPowerDirection):
         if pd == BatteryPowerDirection.CHARGING:
@@ -204,15 +202,12 @@ class InverterMonitor(Thread):
     def ac_charging_stop(self, reason: ChargingState):
         self.charging_state = reason
 
-        match reason:
-            case ChargingState.AC_DONE:
-                event = ChargingEvent.AC_CHARGING_FINISHED
-
-            case ChargingState.NOT_CHARGING:
-                event = ChargingEvent.AC_DISCONNECTED
-
-            case _:
-                raise ValueError(f'ac_charging_stop: unexpected reason {reason}')
+        if reason == ChargingState.AC_DONE:
+            event = ChargingEvent.AC_CHARGING_FINISHED
+        elif reason == ChargingState.NOT_CHARGING:
+            event = ChargingEvent.AC_DISCONNECTED
+        else:
+            raise ValueError(f'ac_charging_stop: unexpected reason {reason}')
 
         _logger.info(f'charging is finished, entering {reason} state')
         self.charging_event_handler(event)
