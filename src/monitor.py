@@ -172,7 +172,13 @@ class InverterMonitor(Thread):
 
             # if currently charging, monitor battery voltage dynamics here
             if self.active_current is not None:
-                upper_bound = 56.6 if self.active_current > 10 else 54
+                if self.active_current >= 30:
+                    upper_bound = 56.9
+                elif self.active_current == 20:
+                    upper_bound = 56.6
+                else:
+                    upper_bound = 54
+
                 if v >= upper_bound:
                     self.ac_charging_next_current()
 
