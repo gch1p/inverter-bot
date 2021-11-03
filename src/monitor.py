@@ -28,7 +28,7 @@ class ChargingState(Enum):
 
 class BatteryState(Enum):
     NORMAL = auto()
-    WARNING = auto()
+    LOW = auto()
     CRITICAL = auto()
 
 
@@ -81,13 +81,14 @@ class InverterMonitor(Thread):
                     ac = gs['grid_voltage']['value'] > 0 or gs['grid_freq']['value'] > 0
                     solar = gs['pv1_input_power']['value'] > 0
                     v = float(gs['battery_voltage']['value'])
+                    load_watts = int(gs['ac_output_active_power']['value'])
 
                     _logger.debug(f'got status: ac={ac}, solar={solar}, v={v}')
 
                     self.ac_charging_program(ac, solar, v)
 
                     if not ac:
-                        self.low_voltage_program(v)
+                        self.low_voltage_program(v, load_watts)
                     elif self.battery_state != BatteryState.NORMAL:
                         self.battery_state = BatteryState.NORMAL
 
@@ -181,17 +182,17 @@ class InverterMonitor(Thread):
         except InverterError as e:
             _logger.exception(e)
 
-    def low_voltage_program(self, v: float):
+    def low_voltage_program(self, v: float, load_watts: int):
         if v < 45:
             state = BatteryState.CRITICAL
         elif v < 47:
-            state = BatteryState.WARNING
+            state = BatteryState.LOW
         else:
             state = BatteryState.NORMAL
 
         if state != self.battery_state:
             self.battery_state = state
-            self.battery_event_handler(state, v=v)
+            self.battery_event_handler(state, v, load_watts)
 
     def set_charging_event_handler(self, handler: Callable):
         self.charging_event_handler = handler

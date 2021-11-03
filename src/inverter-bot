@@ -63,7 +63,7 @@ _strings = {
     'chrg_evt_disconnected': 'AC line disconnected.',
     'chrg_evt_current_changed': 'AC charging current set to <b>%dA</b>.',
     'chrg_evt_na_solar': 'AC line detected, but battery charging is unavailable due to active solar power line.',
-    'battery_state_changed': 'Battery voltage state changed to <b>%s</b> (%0.1f V)'
+    'battery_level_changed': 'Battery level: <b>%s</b> (<b>%0.1f V</b> under <b>%d W</b> load)'
 }
 logger = logging.getLogger(__name__)
 
@@ -395,18 +395,18 @@ def monitor_charging_event_handler(event: ChargingEvent, **kwargs) -> None:
     notify_all(_(f'chrg_evt_{key}', *args))
 
 
-def monitor_battery_event_handler(state: BatteryState, v: float) -> None:
+def monitor_battery_event_handler(state: BatteryState, v: float, load_watts: int) -> None:
     if state == BatteryState.NORMAL:
-        label = 'normal'
-    elif state == BatteryState.WARNING:
-        label = 'warning'
+        label = '✅ Normal'
+    elif state == BatteryState.LOW:
+        label = '⚠️ Low'
     elif state == BatteryState.CRITICAL:
-        label = 'critical'
+        label = '‼️ Critical'
     else:
         logger.error('unknown battery state:', state)
         return
 
-    notify_all(_('battery_state_changed', label, v))
+    notify_all(_('battery_level_changed', label, v, load_watts))
 
 
 if __name__ == '__main__':
