@@ -260,8 +260,8 @@ class InverterMonitor(Thread):
         self.error_handler = handler
 
     def set_ac_current_range(self, ac_current_range: Union[List, Tuple] = ()) -> None:
-        self.max_ac_current = ac_current_range[0]
-        self.min_ac_current = ac_current_range[1]
+        self.min_ac_current = ac_current_range[0]
+        self.max_ac_current = ac_current_range[1]
         _logger.debug(f'setting AC current range to {ac_current_range[0]} A .. {ac_current_range[1]} A')
 
     def set_battery_under_voltage(self, v: float):
