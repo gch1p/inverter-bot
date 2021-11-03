@@ -62,6 +62,7 @@ _strings = {
     'chrg_evt_current_changed': 'ℹ️ AC charging current set to %d A.',
     'chrg_evt_not_charging': 'ℹ️ AC connected but not charging.',
     'chrg_evt_na_solar': '⛔️AC connected, but battery won\'t be charged due to active solar power line.',
+    'chrg_evt_mostly_charged': '✅ The battery is mostly charged now. The generator can be turned off.',
     'battery_level_changed': 'Battery level: <b>%s</b> (<b>%0.1f V</b> under <b>%d W</b> load)',
     'error_message': '<b>Error:</b> %s.'
 }
@@ -392,6 +393,8 @@ def monitor_charging_event_handler(event: ChargingEvent, **kwargs) -> None:
         args.append(kwargs['current'])
     elif event == ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR:
         key = 'na_solar'
+    elif event == ChargingEvent.AC_MOSTLY_CHARGED:
+        key = 'mostly_charged'
     else:
         logger.error('unknown charging event:', event)
         return

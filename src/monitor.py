@@ -22,6 +22,7 @@ class ChargingEvent(Enum):
     AC_CHARGING_STARTED = auto()
     AC_DISCONNECTED = auto()
     AC_CURRENT_CHANGED = auto()
+    AC_MOSTLY_CHARGED = auto()
     AC_CHARGING_FINISHED = auto()
 
 
@@ -65,6 +66,7 @@ class InverterMonitor(Thread):
     interrupted: bool
     battery_state: BatteryState
     charging_state: ChargingState
+    mostly_charged: bool
 
     def __init__(self, ac_current_range: Union[List, Tuple] = ()):
         super().__init__()
@@ -86,6 +88,7 @@ class InverterMonitor(Thread):
         self.active_current = None
         self.battery_state = BatteryState.NORMAL
         self.charging_state = ChargingState.NOT_CHARGING
+        self.mostly_charged = False
 
         # other stuff
         self.interrupted = False
@@ -163,6 +166,10 @@ class InverterMonitor(Thread):
                 self.charging_event_handler(ChargingEvent.AC_CHARGING_UNAVAILABLE_BECAUSE_SOLAR)
                 _logger.info('solar power connected during charging, entering AC_BUT_SOLAR state')
 
+            if self.mostly_charged and v > 53 and pd != BatteryPowerDirection.CHARGING:
+                self.ac_charging_stop(ChargingState.AC_DONE)
+                return
+
             state = ChargingState.AC_OK if pd == BatteryPowerDirection.CHARGING else ChargingState.AC_WAITING
             if state != self.charging_state:
                 self.charging_state = state
@@ -175,7 +182,7 @@ class InverterMonitor(Thread):
                 if self.active_current >= 30:
                     upper_bound = 56.9
                 elif self.active_current == 20:
-                    upper_bound = 56.6
+                    upper_bound = 56.7
                 else:
                     upper_bound = 54
 
@@ -220,6 +227,7 @@ class InverterMonitor(Thread):
 
         if self.currents:
             self.currents = []
+            self.mostly_charged = False
             self.active_current = None
 
     def ac_charging_next_current(self):
@@ -231,6 +239,10 @@ class InverterMonitor(Thread):
             _logger.debug('was going to change charging current, but no currents left; finishing charging program')
             self.ac_charging_stop(ChargingState.AC_DONE)
             return
+
+        if current <= 10 and not self.mostly_charged:
+            self.mostly_charged = True
+            self.charging_event_handler(ChargingEvent.AC_MOSTLY_CHARGED)
 
         try:
             response = inverter.exec('set-max-ac-charging-current', (0, current))
