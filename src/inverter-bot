@@ -441,7 +441,7 @@ if __name__ == '__main__':
     inverter.init(host=args.inverterd_host, port=args.inverterd_port)
 
     # start monitoring
-    monitor = InverterMonitor(args.ac_current_range)
+    monitor = InverterMonitor(list(map(lambda x: int(x), args.ac_current_range)))
     monitor.set_charging_event_handler(monitor_charging_event_handler)
     monitor.set_battery_event_handler(monitor_battery_event_handler)
     monitor.set_error_handler(monitor_error_handler)
