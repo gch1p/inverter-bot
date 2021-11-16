@@ -3,6 +3,7 @@ import logging
 import re
 import datetime
 import json
+import solarmon_api
 
 from typing import Optional, Tuple
 from argparse import ArgumentParser
@@ -29,6 +30,7 @@ from telegram.error import TimedOut
 
 monitor: Optional[InverterMonitor] = None
 updater: Optional[Updater] = None
+solarmon: Optional[solarmon_api.Client] = None
 notify_to: list[int] = []
 LT = escape('<=')
 flags_map = {
@@ -154,6 +156,11 @@ def beautify_table(s):
     return '\n'.join(lines)
 
 
+def solarmon_report(update: Update, message: str = None) -> None:
+    if message is None:
+        message = update.message.text
+    solarmon.log_bot_request(solarmon_api.BotType.INVERTER, update.message.chat_id, message)
+
 #
 # command/message handlers
 #
@@ -197,6 +204,8 @@ def msg_status(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         handle_exc(update, e)
 
+    solarmon_report(update)
+
 
 def msg_generation(update: Update, context: CallbackContext) -> None:
     try:
@@ -236,6 +245,8 @@ def msg_generation(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         handle_exc(update, e)
 
+    solarmon_report(update)
+
 
 def msg_all(update: Update, context: CallbackContext) -> None:
     reply(update, "Command not recognized. Please try again.")
@@ -258,6 +269,8 @@ def on_set_ac_charging_current(update: Update, context: CallbackContext) -> None
         })
         reply(update, usage)
 
+    solarmon_report(update)
+
 
 def on_set_ac_charging_thresholds(update: Update, context: CallbackContext) -> None:
     try:
@@ -278,6 +291,8 @@ def on_set_ac_charging_thresholds(update: Update, context: CallbackContext) -> N
         })
         reply(update, usage)
 
+    solarmon_report(update)
+
 
 def on_set_battery_under_voltage(update: Update, context: CallbackContext) -> None:
     try:
@@ -296,6 +311,8 @@ def on_set_battery_under_voltage(update: Update, context: CallbackContext) -> No
         })
         reply(update, usage)
 
+    solarmon_report(update)
+
 
 def build_flags_keyboard(flags: dict) -> Tuple[str, InlineKeyboardMarkup]:
     keyboard = []
@@ -313,6 +330,7 @@ def on_flags(update: Update, context: CallbackContext) -> None:
     flags = inverter.exec('get-flags')['data']
     text, markup = build_flags_keyboard(flags)
     reply(update, text, reply_markup=markup)
+    solarmon_report(update)
 
 
 def on_status(update: Update, context: CallbackContext) -> None:
@@ -322,6 +340,8 @@ def on_status(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         handle_exc(update, e)
 
+    solarmon_report(update)
+
 
 def on_config(update: Update, context: CallbackContext) -> None:
     try:
@@ -330,6 +350,8 @@ def on_config(update: Update, context: CallbackContext) -> None:
     except Exception as e:
         handle_exc(update, e)
 
+    solarmon_report(update)
+
 
 def on_errors(update: Update, context: CallbackContext) -> None:
     try:
@@ -337,6 +359,8 @@ def on_errors(update: Update, context: CallbackContext) -> None:
         reply(update, beautify_table(errors))
     except Exception as e:
         handle_exc(update, e)
+
+    solarmon_report(update)
 
 
 def on_button(update: Update, context: CallbackContext) -> None:
@@ -369,6 +393,8 @@ def on_button(update: Update, context: CallbackContext) -> None:
         flags[json_key] = not cur_flag_value
         text, markup = build_flags_keyboard(flags)
         query.edit_message_text(text, reply_markup=markup)
+
+        solarmon_report(update, message=query.data)
 
     else:
         query.answer('unexpected callback data')
@@ -432,6 +458,7 @@ if __name__ == '__main__':
     parser.add_argument('--inverterd-host', default='127.0.0.1', type=str)
     parser.add_argument('--inverterd-port', default=8305, type=int)
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--solarmon-api-token', type=str, required=True)
     args = parser.parse_args()
 
     whitelist = list(map(lambda x: int(x), args.users_whitelist))
@@ -473,6 +500,10 @@ if __name__ == '__main__':
     dispatcher.add_handler(CommandHandler('errors', on_errors))
 
     dispatcher.add_handler(MessageHandler(Filters.all & user_filter, msg_all))
+
+    # create api client instance
+    solarmon = solarmon_api.Client(args.solarmon_api_token, timeout=3)
+    solarmon.enable_async()
 
     # start the bot
     updater.start_polling()
